@@ -8,6 +8,9 @@ ARG VERSION=dev
 RUN CGO_ENABLED=0 go build -ldflags="-s -w -X main.version=${VERSION}" -o /tunnel-server ./cmd/server
 
 FROM alpine:3.21
+LABEL org.opencontainers.image.source=https://github.com/anivaryam/tunnel
+LABEL org.opencontainers.image.description="Self-hosted ngrok alternative: tunnel server"
+LABEL org.opencontainers.image.licenses=MIT
 RUN apk add --no-cache ca-certificates wget && \
     addgroup -S tunnel && adduser -S -G tunnel -u 65532 tunnel
 COPY --from=builder /tunnel-server /tunnel-server
