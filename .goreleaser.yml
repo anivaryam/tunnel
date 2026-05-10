@@ -1,0 +1,82 @@
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+    - go test -tags daemon ./... -count=1
+    - rm -rf .gen/man
+    - mkdir -p .gen/man
+    - go run ./cmd/tunnel __gen-man .gen/man
+
+builds:
+  - id: tunnel
+    main: ./cmd/tunnel
+    binary: tunnel
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -tags=daemon
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - id: tunnel
+    builds:
+      - tunnel
+    format: tar.gz
+    name_template: "tunnel_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        format: zip
+    files:
+      - src: README.md
+      - src: .gen/man/*.1
+        dst: man
+        strip_parent: true
+
+checksum:
+  name_template: "checksums.txt"
+
+# Keyless cosign signing of the checksums file. Each release ships
+# checksums.txt + checksums.txt.pem + checksums.txt.sig — verify with:
+#   cosign verify-blob --certificate checksums.txt.pem \
+#     --signature checksums.txt.sig \
+#     --certificate-identity-regexp 'https://github.com/anivaryam/tunnel/.*' \
+#     --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+#     checksums.txt
+signs:
+  - cmd: cosign
+    env:
+      - COSIGN_EXPERIMENTAL=1
+    artifacts: checksum
+    certificate: "${artifact}.pem"
+    args:
+      - sign-blob
+      - "--yes"
+      - "--output-certificate=${certificate}"
+      - "--output-signature=${signature}"
+      - "${artifact}"
+    output: true
+
+snapshot:
+  name_template: "{{ incpatch .Version }}-snapshot"
+
+release:
+  draft: false
+  prerelease: auto
+
+changelog:
+  sort: asc
+  use: github
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"

@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+
+      - uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.62.2
+
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.23"
+
+      - name: Build client
+        run: go build ./cmd/tunnel
+
+      - name: Build server
+        run: go build ./cmd/server
+
+      - name: Build client (daemon tag)
+        run: go build -tags daemon ./cmd/tunnel
+
+      - name: Test
+        run: go test ./... -race -count=1
+
+      - name: Test (daemon tag)
+        run: go test -tags daemon ./... -race -count=1

@@ -1,0 +1,8 @@
+bin/
+*.exe
+.claude/
+CLAUDE.md
+/server
+/tunnel
+.worktrees/
+.gen/
