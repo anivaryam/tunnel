@@ -107,17 +107,17 @@ func friendlyDialError(serverURL string, err error) error {
 	msg := err.Error()
 	switch {
 	case strings.Contains(msg, "connection refused"):
-		return fmt.Errorf("relay %s is not reachable (connection refused). Is the relay running and is the URL correct? Try `tunnel doctor`.", serverURL)
+		return fmt.Errorf("relay %s is not reachable (connection refused); is the relay running and is the URL correct? try `tunnel doctor`", serverURL)
 	case strings.Contains(msg, "no such host"), strings.Contains(msg, "name resolution"):
-		return fmt.Errorf("relay %s: DNS lookup failed. Is the hostname correct? Try `tunnel doctor`.", serverURL)
+		return fmt.Errorf("relay %s: DNS lookup failed; is the hostname correct? try `tunnel doctor`", serverURL)
 	case strings.Contains(msg, "i/o timeout"), strings.Contains(msg, "deadline exceeded"):
 		return fmt.Errorf("relay %s: connection timed out. Network or firewall issue?", serverURL)
 	case strings.Contains(msg, "tls:"), strings.Contains(msg, "x509:"), strings.Contains(msg, "certificate"):
-		return fmt.Errorf("relay %s: TLS handshake failed (%v).", serverURL, err)
+		return fmt.Errorf("relay %s: TLS handshake failed (%v)", serverURL, err)
 	case strings.Contains(msg, "401"):
-		return fmt.Errorf("relay %s: unauthorized — token missing or invalid. Set with `tunnel config set-token <token>`.", serverURL)
+		return fmt.Errorf("relay %s: unauthorized - token missing or invalid; set with `tunnel config set-token <token>`", serverURL)
 	case strings.Contains(msg, "429"):
-		return fmt.Errorf("relay %s: rejected with 429 Too Many Requests — per-token or per-IP cap reached.", serverURL)
+		return fmt.Errorf("relay %s: rejected with 429 too many requests - per-token or per-IP cap reached", serverURL)
 	}
 	return fmt.Errorf("dial: %w", err)
 }

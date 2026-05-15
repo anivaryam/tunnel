@@ -16,6 +16,10 @@ import (
 var version = "dev"
 
 func main() {
+	os.Exit(run())
+}
+
+func run() int {
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
@@ -55,25 +59,31 @@ func main() {
 		MaxHeaderBytes:    32 << 10,
 	}
 
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
+	serverErr := make(chan error, 1)
 	go func() {
 		log.Printf("relay server listening on :%s", port)
 		if err := httpSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Printf("server error: %v", err)
-			os.Exit(1)
+			serverErr <- err
 		}
 	}()
 
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
-	<-quit
+	select {
+	case <-quit:
+	case err := <-serverErr:
+		log.Printf("server error: %v", err)
+		return 1
+	}
 
 	log.Println("shutting down server...")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	if err := httpSrv.Shutdown(ctx); err != nil {
 		cancel()
 		log.Printf("shutdown error: %v", err)
-		os.Exit(1)
+		return 1
 	}
 	cancel()
 	log.Println("server stopped")
+	return 0
 }
