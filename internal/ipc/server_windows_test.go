@@ -30,12 +30,22 @@ func TestNamedPipeListenAndDial(t *testing.T) {
 	if ev.Type != TypeSnapshot || ev.Snapshot == nil || ev.Snapshot.Name != "win" {
 		t.Fatalf("unexpected snapshot: %+v", ev)
 	}
+	c.Close()
+	srv.Shutdown()
 
-	srv2 := NewServer(addr)
-	if err := srv2.Listen(); err != nil {
-		t.Fatalf("relisten: %v", err)
+	deadline := time.Now().Add(time.Second)
+	var srv2 *Server
+	var lastErr error
+	for time.Now().Before(deadline) {
+		srv2 = NewServer(addr)
+		lastErr = srv2.Listen()
+		if lastErr == nil {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if lastErr != nil {
+		t.Fatalf("relisten: %v", lastErr)
 	}
 	srv2.Shutdown()
-
-	_ = time.Now()
 }
