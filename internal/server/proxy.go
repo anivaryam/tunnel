@@ -668,7 +668,8 @@ body{
 .scanlines{position:fixed;inset:0;z-index:1;pointer-events:none;mix-blend-mode:overlay;
   background:repeating-linear-gradient(to bottom,rgba(255,255,255,.025) 0 1px,transparent 1px 3px);opacity:.6}
 .vignette{position:fixed;inset:0;z-index:1;pointer-events:none;box-shadow:inset 0 0 220px 40px rgba(0,0,0,.65)}
-main{position:relative;z-index:2;max-width:1280px;margin:0 auto;padding:24px clamp(16px,4vw,40px) 80px}
+main{position:relative;z-index:2;max-width:1280px;margin:0 auto;padding:24px clamp(16px,4vw,40px) 80px;min-width:0}
+.card-head{min-width:0}
 .topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;
   padding:14px 18px;margin-bottom:24px;border:1px solid var(--line);border-radius:14px;
   background:linear-gradient(180deg,rgba(8,13,24,.85),rgba(8,13,24,.55));
@@ -704,8 +705,8 @@ main{position:relative;z-index:2;max-width:1280px;margin:0 auto;padding:24px cla
 .section-head{display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin:8px 4px 12px}
 .section-head h2{font-family:'Orbitron',sans-serif;font-weight:700;font-size:13px;letter-spacing:.32em;color:var(--fg);text-transform:uppercase}
 .section-head .meta{font-size:11px;letter-spacing:.2em;color:var(--fg-dim);text-transform:uppercase}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px}
-.card{position:relative;padding:16px;border:1px solid var(--line);border-radius:14px;
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,320px),1fr));gap:14px}
+.card{min-width:0;position:relative;padding:16px;border:1px solid var(--line);border-radius:14px;
   background:linear-gradient(180deg,rgba(10,16,28,.9),rgba(10,16,28,.6));
   backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
   transition:border-color .2s,transform .2s,box-shadow .2s}
@@ -722,19 +723,20 @@ main{position:relative;z-index:2;max-width:1280px;margin:0 auto;padding:24px cla
 .badge.http{color:var(--accent);border-color:rgba(0,240,255,.35);background:rgba(0,240,255,.08)}
 .badge.tcp{color:var(--accent-2);border-color:rgba(255,43,214,.35);background:rgba(255,43,214,.08)}
 .badge.udp{color:var(--accent-3);border-color:rgba(184,255,94,.35);background:rgba(184,255,94,.08)}
-.url-row{display:flex;align-items:center;gap:8px;padding:10px 12px;margin-bottom:12px;
+.url-row{display:flex;align-items:center;gap:8px;padding:10px 12px;margin-bottom:12px;min-width:0;
   border:1px dashed var(--line-strong);border-radius:10px;background:rgba(0,240,255,.03)}
-.url-row a{color:var(--accent);text-decoration:none;font-size:12px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.url-row a{color:var(--accent);text-decoration:none;font-size:12px;flex:1 1 0;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.url-row .copy{flex:0 0 auto}
 .url-row a:hover{text-decoration:underline}
 .copy{background:transparent;border:1px solid var(--line);color:var(--fg-dim);
   padding:4px 8px;border-radius:6px;font-family:inherit;font-size:10px;letter-spacing:.16em;
   cursor:pointer;text-transform:uppercase;transition:all .15s}
 .copy:hover{color:var(--accent);border-color:var(--accent)}
 .copy.ok{color:var(--accent-3);border-color:var(--accent-3)}
-.specs{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px}
+.specs{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px 14px;min-width:0}
 .spec{display:flex;flex-direction:column;gap:2px;min-width:0}
 .spec dt{font-size:9px;letter-spacing:.24em;color:var(--fg-dim);text-transform:uppercase}
-.spec dd{font-size:12px;color:var(--fg);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.spec dd{font-size:12px;color:var(--fg);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .spec dd.uptime{color:var(--accent);font-family:'Orbitron',sans-serif;letter-spacing:.08em}
 .hero{position:relative;display:grid;grid-template-columns:minmax(0,360px) 1fr;gap:20px;align-items:stretch;margin-bottom:24px}
 .hero .frame{position:relative;border:1px solid var(--line);border-radius:14px;overflow:hidden;
