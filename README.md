@@ -227,6 +227,7 @@ With subdomain routing each app gets its own browser origin, so cookies, WebSock
 | `TUNNEL_MAX_TUNNELS_PER_IP` | No | Cap on simultaneous tunnels per remote IP. Default `100`. Set to `0` to disable |
 | `TUNNEL_WS_ORIGINS` | No | Comma-separated Origin allowlist for `/ws/connect`. Empty (default) skips the check (CLI clients send no Origin header). Set only when expecting browser-only clients, e.g. `TUNNEL_WS_ORIGINS=https://my-app.com,https://other.com` |
 | `TUNNEL_TRUST_PROXY` | No | Default `false` strips inbound `X-Forwarded-*` and rewrites from observed values. Set `true` ONLY when the binary sits behind a trusted TLS-terminating LB (Railway, Cloudflare, fly.io); the local app then sees the original client IP and `https` scheme. Setting `true` on the public edge would let any peer lie about their source IP |
+| `TUNNEL_HERO_LOTTIE_URL` | No | Optional Lottie/`.lottie` asset URL rendered as the cyberpunk hero panel on the public landing page. Loaded client-side via `dotlottie-player`. When unset the hero panel is omitted entirely. Example: `https://assets-v2.lottiefiles.com/a/<id>/<file>.lottie` |
 
 ### Railway
 
