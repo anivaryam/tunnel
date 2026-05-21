@@ -736,6 +736,23 @@ main{position:relative;z-index:2;max-width:1280px;margin:0 auto;padding:24px cla
 .spec dt{font-size:9px;letter-spacing:.24em;color:var(--fg-dim);text-transform:uppercase}
 .spec dd{font-size:12px;color:var(--fg);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .spec dd.uptime{color:var(--accent);font-family:'Orbitron',sans-serif;letter-spacing:.08em}
+.hero{position:relative;display:grid;grid-template-columns:minmax(0,360px) 1fr;gap:20px;align-items:stretch;margin-bottom:24px}
+.hero .frame{position:relative;border:1px solid var(--line);border-radius:14px;overflow:hidden;
+  background:radial-gradient(circle at 30% 30%,rgba(255,43,214,.12),transparent 60%),linear-gradient(180deg,rgba(8,13,24,.85),rgba(8,13,24,.55));
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);min-height:280px;display:grid;place-items:center;padding:12px}
+.hero .frame::before,.hero .frame::after{content:"";position:absolute;left:0;right:0;height:24px;pointer-events:none;z-index:2}
+.hero .frame::before{top:0;background:linear-gradient(180deg,rgba(4,6,11,.7),transparent)}
+.hero .frame::after{bottom:0;background:linear-gradient(0deg,rgba(4,6,11,.7),transparent)}
+.hero lottie-player,.hero dotlottie-player{width:100%;height:100%;max-height:380px;filter:drop-shadow(0 0 18px rgba(255,43,214,.25)) drop-shadow(0 0 24px rgba(0,240,255,.18))}
+.hero .tag{position:absolute;top:10px;left:12px;z-index:3;font-family:'Orbitron',sans-serif;font-size:10px;letter-spacing:.32em;color:var(--accent);text-transform:uppercase;text-shadow:0 0 8px rgba(0,240,255,.6)}
+.hero .sig{position:absolute;bottom:10px;right:12px;z-index:3;font-size:9px;letter-spacing:.24em;color:var(--fg-dim);text-transform:uppercase}
+.hero .side{display:flex;flex-direction:column;justify-content:center;gap:14px;padding:18px;border:1px solid var(--line);border-radius:14px;
+  background:linear-gradient(180deg,rgba(12,19,34,.85),rgba(12,19,34,.55));backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+.hero .side h2{font-family:'Orbitron',sans-serif;font-weight:700;font-size:clamp(20px,2.6vw,28px);letter-spacing:.18em;text-transform:uppercase;color:var(--fg);line-height:1.15}
+.hero .side h2 .accent{color:var(--accent-2);text-shadow:0 0 14px rgba(255,43,214,.55)}
+.hero .side p{font-size:12px;color:var(--fg-dim);letter-spacing:.06em;line-height:1.7}
+.hero .side .chips{display:flex;flex-wrap:wrap;gap:6px}
+.hero .side .chip{font-size:9px;letter-spacing:.24em;text-transform:uppercase;padding:4px 10px;border:1px solid var(--line);border-radius:999px;color:var(--accent-3);background:rgba(184,255,94,.04)}
 .empty{padding:60px 20px;text-align:center;color:var(--fg-dim);border:1px dashed var(--line);
   border-radius:14px;font-size:13px;letter-spacing:.16em;text-transform:uppercase}
 .empty .big{display:block;font-family:'Orbitron',sans-serif;font-size:18px;color:var(--fg);letter-spacing:.32em;margin-bottom:14px}
@@ -744,6 +761,10 @@ main{position:relative;z-index:2;max-width:1280px;margin:0 auto;padding:24px cla
 .blink{color:var(--accent);animation:blink 1.2s steps(2,start) infinite}
 @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.55;transform:scale(.85)}}
 @keyframes blink{50%{opacity:0}}
+@media (max-width:900px){
+  .hero{grid-template-columns:1fr}
+  .hero lottie-player,.hero dotlottie-player{max-height:260px}
+}
 @media (max-width:720px){
   .kpis{grid-template-columns:repeat(2,1fr)}
   .brand h1{font-size:13px;letter-spacing:.22em}
@@ -802,6 +823,7 @@ const publicPageHeadOpen = `<!DOCTYPE html>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/@dotlottie/player-component@2.7.12/dist/dotlottie-player.mjs" type="module"></script>
 <style>`
 
 const publicPageHeadClose = `</style></head><body>
@@ -831,17 +853,43 @@ const publicPageFooter = `</main>
 <script>` + publicPageScripts + `</script>
 </body></html>`
 
+// renderHero emits the cyberpunk hero panel when a Lottie URL is configured.
+// When the URL is empty the function is a no-op so production deploys without
+// the asset render cleanly.
+func renderHero(w http.ResponseWriter, lottieURL string) {
+	if lottieURL == "" {
+		return
+	}
+	fmt.Fprintf(w, `<section class="hero" aria-label="cyberpunk hero">
+<div class="frame">
+  <span class="tag">// signal_01</span>
+  <dotlottie-player src="%s" autoplay loop background="transparent" speed="1"></dotlottie-player>
+  <span class="sig">render :: lottie</span>
+</div>
+<aside class="side">
+  <h2>Relay <span class="accent">Online</span></h2>
+  <p>Encrypted reverse tunnels. Public hostnames. Sub-second wake. The grid is live.</p>
+  <div class="chips"><span class="chip">HTTPS</span><span class="chip">TCP</span><span class="chip">UDP</span><span class="chip">WS</span><span class="chip">SSE</span></div>
+</aside>
+</section>`, html.EscapeString(lottieURL))
+}
+
 func renderNoTunnelPage(w http.ResponseWriter) {
+	renderNoTunnelPageWithHero(w, "")
+}
+
+func renderNoTunnelPageWithHero(w http.ResponseWriter, lottieURL string) {
 	io.WriteString(w, publicPageHeadOpen)
 	io.WriteString(w, publicPageStyles)
 	io.WriteString(w, publicPageHeadClose)
+	renderHero(w, lottieURL)
 	io.WriteString(w, `<div class="empty"><span class="big">No tunnel connected</span>Awaiting handshake <span class="blink">_</span><br><br>Start one with<br><code>tunnel http &lt;port&gt;</code></div>`)
 	io.WriteString(w, publicPageFooter)
 }
 
 func renderTunnelListPage(w http.ResponseWriter, tunnels []*Tunnel, cfg Config) {
 	if len(tunnels) == 0 {
-		renderNoTunnelPage(w)
+		renderNoTunnelPageWithHero(w, cfg.HeroLottieURL)
 		return
 	}
 
@@ -853,6 +901,7 @@ func renderTunnelListPage(w http.ResponseWriter, tunnels []*Tunnel, cfg Config) 
 	io.WriteString(w, publicPageHeadOpen)
 	io.WriteString(w, publicPageStyles)
 	io.WriteString(w, publicPageHeadClose)
+	renderHero(w, cfg.HeroLottieURL)
 
 	fmt.Fprintf(w, `<section class="kpis" aria-label="summary">
 <div class="kpi cyan"><h3>Active Tunnels</h3><div class="v">%d</div><div class="sub">live channels</div></div>

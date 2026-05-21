@@ -21,6 +21,7 @@ type Config struct {
 	CFWorkerEnabled  bool     // if true, require WorkerSecret for Cloudflare Worker routing; if false (default), use direct DNS subdomain routing when BASE_DOMAIN is set
 	SingleTunnelMode bool     // if true, only one tunnel may connect; root / proxies directly to it
 	WSOriginPatterns []string // optional Origin allowlist for /ws/connect (CLI control channel); empty disables Origin checks (back-compat default)
+	HeroLottieURL    string   // optional Lottie JSON URL rendered as hero asset on the public landing page; empty hides the hero panel
 }
 
 // Server holds the HTTP handler.

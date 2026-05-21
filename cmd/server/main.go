@@ -44,6 +44,7 @@ func run() int {
 		CFWorkerEnabled:  cfWorkerEnabled,
 		SingleTunnelMode: os.Getenv("SINGLE_TUNNEL_MODE") == "true",
 		WSOriginPatterns: wsOrigins,
+		HeroLottieURL:    os.Getenv("TUNNEL_HERO_LOTTIE_URL"),
 	}
 	s := server.New(cfg)
 	defer s.Close()
