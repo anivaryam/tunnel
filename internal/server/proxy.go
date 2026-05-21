@@ -643,97 +643,274 @@ func rootHandler(hub *Hub, metrics *Metrics, cfg Config) http.HandlerFunc {
 	}
 }
 
-const noTunnelPageHTML = `<!DOCTYPE html>
+// publicPageStyles is the shared futuristic-HUD stylesheet used by the
+// public no-tunnel and tunnel-list pages. Keep in sync with the admin
+// dashboard's visual language but expose no per-client detail.
+const publicPageStyles = `
+:root {
+  --bg-0:#04060b; --bg-1:#080d18; --bg-2:#0c1322;
+  --line:rgba(118,230,255,0.12); --line-strong:rgba(118,230,255,0.32);
+  --fg:#d6e6ff; --fg-dim:#6a7e9a;
+  --accent:#00f0ff; --accent-2:#ff2bd6; --accent-3:#b8ff5e; --warn:#ffb547;
+  --shadow-glow:0 0 24px rgba(0,240,255,0.18),0 0 80px rgba(255,43,214,0.06);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{background:var(--bg-0);color:var(--fg);font-family:'JetBrains Mono',ui-monospace,monospace;min-height:100dvh}
+body{
+  background:
+    radial-gradient(1200px 600px at 80% -10%,rgba(255,43,214,.10),transparent 60%),
+    radial-gradient(1000px 500px at -10% 100%,rgba(0,240,255,.10),transparent 60%),
+    linear-gradient(180deg,#04060b 0%,#060912 100%);
+  overflow-x:hidden;-webkit-font-smoothing:antialiased;
+}
+#bg{position:fixed;inset:0;z-index:0;pointer-events:none}
+#bg canvas{width:100%;height:100%;display:block;opacity:.55}
+.scanlines{position:fixed;inset:0;z-index:1;pointer-events:none;mix-blend-mode:overlay;
+  background:repeating-linear-gradient(to bottom,rgba(255,255,255,.025) 0 1px,transparent 1px 3px);opacity:.6}
+.vignette{position:fixed;inset:0;z-index:1;pointer-events:none;box-shadow:inset 0 0 220px 40px rgba(0,0,0,.65)}
+main{position:relative;z-index:2;max-width:1280px;margin:0 auto;padding:24px clamp(16px,4vw,40px) 80px}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:16px;
+  padding:14px 18px;margin-bottom:24px;border:1px solid var(--line);border-radius:14px;
+  background:linear-gradient(180deg,rgba(8,13,24,.85),rgba(8,13,24,.55));
+  backdrop-filter:blur(14px) saturate(140%);-webkit-backdrop-filter:blur(14px) saturate(140%);
+  box-shadow:var(--shadow-glow)}
+.brand{display:flex;align-items:center;gap:12px;min-width:0}
+.logo{width:36px;height:36px;flex:0 0 36px;border:1px solid var(--line-strong);border-radius:10px;
+  display:grid;place-items:center;background:radial-gradient(circle at 30% 30%,rgba(0,240,255,.35),transparent 60%);
+  box-shadow:inset 0 0 12px rgba(0,240,255,.35)}
+.logo svg{width:20px;height:20px}
+.brand h1{font-family:'Orbitron',sans-serif;font-weight:900;font-size:15px;letter-spacing:.28em;color:var(--fg);text-transform:uppercase;line-height:1}
+.brand small{font-size:10px;letter-spacing:.32em;color:var(--fg-dim);text-transform:uppercase;display:block;margin-top:4px}
+.cluster{display:flex;align-items:center;gap:14px;flex-wrap:wrap;justify-content:flex-end}
+.pill{display:inline-flex;align-items:center;gap:8px;padding:6px 12px;border-radius:999px;
+  font-size:11px;letter-spacing:.18em;text-transform:uppercase;
+  border:1px solid var(--line);background:rgba(0,240,255,.04);color:var(--fg)}
+.pill .dot{width:7px;height:7px;border-radius:50%;background:var(--accent-3);box-shadow:0 0 10px var(--accent-3);animation:pulse 2s infinite}
+.pill .dot.warn{background:var(--warn);box-shadow:0 0 10px var(--warn)}
+.clock{font-family:'Orbitron',sans-serif;font-size:12px;letter-spacing:.22em;color:var(--accent);text-shadow:0 0 12px rgba(0,240,255,.6)}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:24px}
+.kpi{position:relative;overflow:hidden;padding:16px 18px;border:1px solid var(--line);border-radius:14px;
+  background:linear-gradient(180deg,rgba(12,19,34,.85),rgba(12,19,34,.55));backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+.kpi::before{content:"";position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(120deg,transparent 30%,rgba(0,240,255,.08) 50%,transparent 70%);
+  transform:translateX(-100%);transition:transform .8s}
+.kpi:hover::before{transform:translateX(100%)}
+.kpi h3{font-size:10px;letter-spacing:.32em;color:var(--fg-dim);text-transform:uppercase}
+.kpi .v{font-family:'Orbitron',sans-serif;font-weight:700;font-size:clamp(22px,3.4vw,30px);color:var(--fg);margin-top:8px;line-height:1}
+.kpi.cyan .v{color:var(--accent);text-shadow:0 0 16px rgba(0,240,255,.55)}
+.kpi.magenta .v{color:var(--accent-2);text-shadow:0 0 16px rgba(255,43,214,.55)}
+.kpi.lime .v{color:var(--accent-3);text-shadow:0 0 16px rgba(184,255,94,.45)}
+.kpi .sub{font-size:10px;letter-spacing:.2em;color:var(--fg-dim);margin-top:6px;text-transform:uppercase}
+.section-head{display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin:8px 4px 12px}
+.section-head h2{font-family:'Orbitron',sans-serif;font-weight:700;font-size:13px;letter-spacing:.32em;color:var(--fg);text-transform:uppercase}
+.section-head .meta{font-size:11px;letter-spacing:.2em;color:var(--fg-dim);text-transform:uppercase}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px}
+.card{position:relative;padding:16px;border:1px solid var(--line);border-radius:14px;
+  background:linear-gradient(180deg,rgba(10,16,28,.9),rgba(10,16,28,.6));
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+  transition:border-color .2s,transform .2s,box-shadow .2s}
+.card:hover{border-color:var(--line-strong);transform:translateY(-1px);box-shadow:0 0 24px rgba(0,240,255,.08)}
+.card .corner{position:absolute;width:12px;height:12px;border:1px solid var(--accent);opacity:.7}
+.corner.tl{top:-1px;left:-1px;border-right:none;border-bottom:none}
+.corner.tr{top:-1px;right:-1px;border-left:none;border-bottom:none}
+.corner.bl{bottom:-1px;left:-1px;border-right:none;border-top:none}
+.corner.br{bottom:-1px;right:-1px;border-left:none;border-top:none}
+.card-head{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.live{width:8px;height:8px;border-radius:50%;background:var(--accent-3);box-shadow:0 0 10px var(--accent-3);animation:pulse 1.6s infinite;flex:0 0 8px}
+.id{font-family:'Orbitron',sans-serif;font-weight:700;font-size:14px;letter-spacing:.16em;color:var(--fg);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.badge{font-size:10px;letter-spacing:.2em;text-transform:uppercase;padding:4px 10px;border-radius:999px;border:1px solid}
+.badge.http{color:var(--accent);border-color:rgba(0,240,255,.35);background:rgba(0,240,255,.08)}
+.badge.tcp{color:var(--accent-2);border-color:rgba(255,43,214,.35);background:rgba(255,43,214,.08)}
+.badge.udp{color:var(--accent-3);border-color:rgba(184,255,94,.35);background:rgba(184,255,94,.08)}
+.url-row{display:flex;align-items:center;gap:8px;padding:10px 12px;margin-bottom:12px;
+  border:1px dashed var(--line-strong);border-radius:10px;background:rgba(0,240,255,.03)}
+.url-row a{color:var(--accent);text-decoration:none;font-size:12px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.url-row a:hover{text-decoration:underline}
+.copy{background:transparent;border:1px solid var(--line);color:var(--fg-dim);
+  padding:4px 8px;border-radius:6px;font-family:inherit;font-size:10px;letter-spacing:.16em;
+  cursor:pointer;text-transform:uppercase;transition:all .15s}
+.copy:hover{color:var(--accent);border-color:var(--accent)}
+.copy.ok{color:var(--accent-3);border-color:var(--accent-3)}
+.specs{display:grid;grid-template-columns:1fr 1fr;gap:8px 14px}
+.spec{display:flex;flex-direction:column;gap:2px;min-width:0}
+.spec dt{font-size:9px;letter-spacing:.24em;color:var(--fg-dim);text-transform:uppercase}
+.spec dd{font-size:12px;color:var(--fg);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.spec dd.uptime{color:var(--accent);font-family:'Orbitron',sans-serif;letter-spacing:.08em}
+.empty{padding:60px 20px;text-align:center;color:var(--fg-dim);border:1px dashed var(--line);
+  border-radius:14px;font-size:13px;letter-spacing:.16em;text-transform:uppercase}
+.empty .big{display:block;font-family:'Orbitron',sans-serif;font-size:18px;color:var(--fg);letter-spacing:.32em;margin-bottom:14px}
+.empty code{display:inline-block;margin-top:18px;padding:10px 16px;border:1px solid var(--line-strong);border-radius:8px;
+  font-family:'JetBrains Mono',monospace;font-size:13px;color:var(--accent-3);background:rgba(184,255,94,.04);letter-spacing:.06em;text-transform:none}
+.blink{color:var(--accent);animation:blink 1.2s steps(2,start) infinite}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.55;transform:scale(.85)}}
+@keyframes blink{50%{opacity:0}}
+@media (max-width:720px){
+  .kpis{grid-template-columns:repeat(2,1fr)}
+  .brand h1{font-size:13px;letter-spacing:.22em}
+  .topbar{flex-direction:column;align-items:stretch}
+  .cluster{justify-content:space-between}
+  .grid{grid-template-columns:1fr}
+  .specs{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:reduce){
+  #bg{display:none}
+  .pill .dot,.live,.blink,.kpi::before{animation:none}
+}
+`
+
+// publicPageScripts is the shared animated background + live uptime ticker.
+const publicPageScripts = `
+(() => {
+  const canvas = document.getElementById('bgcanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d', { alpha: true });
+  let w=0,h=0,dpr=Math.min(window.devicePixelRatio||1,2);
+  let t0=performance.now();
+  const nodes = Array.from({length:48},()=>({x:Math.random(),y:Math.random(),vx:(Math.random()-0.5)*0.00012,vy:(Math.random()-0.5)*0.00012}));
+  function resize(){const r=canvas.parentElement.getBoundingClientRect();w=r.width;h=r.height;canvas.width=Math.floor(w*dpr);canvas.height=Math.floor(h*dpr);canvas.style.width=w+'px';canvas.style.height=h+'px';ctx.setTransform(dpr,0,0,dpr,0,0)}
+  resize();window.addEventListener('resize',resize);
+  function frame(now){const dt=now-t0;t0=now;ctx.clearRect(0,0,w,h);
+    ctx.strokeStyle='rgba(0,240,255,0.06)';ctx.lineWidth=1;const step=60;const off=(now*0.012)%step;
+    ctx.beginPath();
+    for(let x=-step+off;x<w+step;x+=step){ctx.moveTo(x,0);ctx.lineTo(x+(h*0.15),h)}
+    for(let y=-step+off;y<h+step;y+=step){ctx.moveTo(0,y);ctx.lineTo(w,y-(w*0.05))}
+    ctx.stroke();
+    for(const n of nodes){n.x+=n.vx*dt;n.y+=n.vy*dt;if(n.x<0||n.x>1)n.vx*=-1;if(n.y<0||n.y>1)n.vy*=-1}
+    for(let i=0;i<nodes.length;i++){const a=nodes[i];
+      for(let j=i+1;j<nodes.length;j++){const b=nodes[j];const dx=(a.x-b.x)*w,dy=(a.y-b.y)*h;const d2=dx*dx+dy*dy;
+        if(d2<160*160){const al=(1-Math.sqrt(d2)/160)*0.35;ctx.strokeStyle='rgba(0,240,255,'+al.toFixed(3)+')';
+          ctx.beginPath();ctx.moveTo(a.x*w,a.y*h);ctx.lineTo(b.x*w,b.y*h);ctx.stroke()}}}
+    for(const n of nodes){ctx.fillStyle='rgba(184,255,94,0.55)';ctx.beginPath();ctx.arc(n.x*w,n.y*h,1.4,0,Math.PI*2);ctx.fill()}
+    requestAnimationFrame(frame)}
+  if(!window.matchMedia('(prefers-reduced-motion: reduce)').matches){requestAnimationFrame(frame)}
+})();
+const clock=document.getElementById('clock');
+if(clock){setInterval(()=>{const d=new Date();const p=n=>String(n).padStart(2,'0');clock.textContent=p(d.getUTCHours())+':'+p(d.getUTCMinutes())+':'+p(d.getUTCSeconds())+' UTC'},1000)}
+function fmtUp(u){if(!u)return '—';let s=Math.max(0,Math.floor(Date.now()/1000)-u);const d=Math.floor(s/86400);s%=86400;const h=Math.floor(s/3600);s%=3600;const m=Math.floor(s/60);s%=60;const p=n=>String(n).padStart(2,'0');return d>0?d+'d '+p(h)+':'+p(m)+':'+p(s):p(h)+':'+p(m)+':'+p(s)}
+function tick(){document.querySelectorAll('[data-uptime]').forEach(el=>{el.textContent=fmtUp(parseInt(el.dataset.uptime,10))})}
+tick();setInterval(tick,1000);
+document.querySelectorAll('.copy').forEach(btn=>{btn.addEventListener('click',()=>{navigator.clipboard.writeText(btn.dataset.copy).then(()=>{btn.textContent='copied';btn.classList.add('ok');setTimeout(()=>{btn.textContent='copy';btn.classList.remove('ok')},1400)}).catch(()=>{btn.textContent='err'})})});
+`
+
+const publicPageHeadOpen = `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>No tunnel connected</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>TUNNEL // RELAY</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Inter',system-ui,sans-serif;background:#0F172A;color:#F8FAFC;min-height:100dvh;display:flex;align-items:center;justify-content:center}
-.card{text-align:center;padding:48px 40px;max-width:480px;width:100%}
-.dot{width:12px;height:12px;border-radius:50%;background:#EF4444;display:inline-block;margin-bottom:24px;animation:pulse 2s ease-in-out infinite}
-@keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.85)}}
-@media(prefers-reduced-motion:reduce){.dot{animation:none}}
-h1{font-size:24px;font-weight:600;color:#F8FAFC;margin-bottom:12px;line-height:1.3}
-p{font-size:15px;color:#94A3B8;line-height:1.6;margin-bottom:24px}
-code{display:inline-block;background:#1E293B;border:1px solid #334155;border-radius:6px;padding:10px 16px;font-family:ui-monospace,'Cascadia Code',monospace;font-size:14px;color:#22C55E;letter-spacing:.01em}
-</style>
-</head>
-<body>
-<div class="card">
-  <div class="dot"></div>
-  <h1>No tunnel connected</h1>
-  <p>Start a tunnel to expose your local server.</p>
-  <code>tunnel http &lt;port&gt;</code>
-</div>
-</body>
-</html>`
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>`
 
-const tunnelListPageHeader = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Active tunnels</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-body{font-family:'Inter',system-ui,sans-serif;background:#0F172A;color:#F8FAFC;min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:24px}
-.card{background:#1E293B;border:1px solid #334155;border-radius:12px;padding:32px;width:100%;max-width:640px}
-h1{font-size:18px;font-weight:600;color:#F8FAFC;margin-bottom:24px;display:flex;align-items:center;gap:8px}
-.dot{width:8px;height:8px;border-radius:50%;background:#22C55E;flex-shrink:0}
-table{width:100%;border-collapse:collapse;font-size:14px}
-th{text-align:left;color:#64748B;font-weight:500;font-size:12px;text-transform:uppercase;letter-spacing:.05em;padding-bottom:12px;border-bottom:1px solid #334155}
-td{padding:14px 0;border-bottom:1px solid #272F42;vertical-align:middle}
-tr:last-child td{border-bottom:none}
-.id{font-family:ui-monospace,'Cascadia Code',monospace;color:#CBD5E1}
-.badge{display:inline-block;background:#272F42;border-radius:4px;padding:2px 8px;font-size:12px;color:#94A3B8;text-transform:uppercase;letter-spacing:.05em}
-a{color:#22C55E;text-decoration:none;font-size:13px}
-a:hover{text-decoration:underline}
-a:focus{outline:2px solid #22C55E;outline-offset:2px;border-radius:2px}
-</style>
-</head>
-<body>
-<div class="card">
-  <h1><span class="dot"></span>Active tunnels</h1>
-  <table>
-    <thead><tr><th>Name / ID</th><th>Mode</th><th>URL</th></tr></thead>
-    <tbody>`
+const publicPageHeadClose = `</style></head><body>
+<div id="bg"><canvas id="bgcanvas"></canvas></div>
+<div class="scanlines"></div>
+<div class="vignette"></div>
+<main>
+<header class="topbar">
+  <div class="brand">
+    <div class="logo" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#00f0ff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M2 12h6l3-9 3 18 3-9h5"/>
+      </svg>
+    </div>
+    <div>
+      <h1>Tunnel</h1>
+      <small>Public Relay // Live</small>
+    </div>
+  </div>
+  <div class="cluster">
+    <span class="pill"><span class="dot"></span><span>Relay Online</span></span>
+    <span class="clock" id="clock">--:--:-- UTC</span>
+  </div>
+</header>`
 
-const tunnelListPageFooter = `    </tbody>
-  </table>
-</div>
-</body>
-</html>`
+const publicPageFooter = `</main>
+<script>` + publicPageScripts + `</script>
+</body></html>`
 
 func renderNoTunnelPage(w http.ResponseWriter) {
-	fmt.Fprint(w, noTunnelPageHTML)
+	io.WriteString(w, publicPageHeadOpen)
+	io.WriteString(w, publicPageStyles)
+	io.WriteString(w, publicPageHeadClose)
+	io.WriteString(w, `<div class="empty"><span class="big">No tunnel connected</span>Awaiting handshake <span class="blink">_</span><br><br>Start one with<br><code>tunnel http &lt;port&gt;</code></div>`)
+	io.WriteString(w, publicPageFooter)
 }
 
 func renderTunnelListPage(w http.ResponseWriter, tunnels []*Tunnel, cfg Config) {
 	if len(tunnels) == 0 {
-		fmt.Fprint(w, noTunnelPageHTML)
+		renderNoTunnelPage(w)
 		return
 	}
-	fmt.Fprint(w, tunnelListPageHeader)
+
+	byMode := map[string]int{"http": 0, "tcp": 0, "udp": 0}
 	for _, t := range tunnels {
-		var url string
-		if cfg.BaseDomain != "" {
-			url = "https://" + html.EscapeString(t.ID) + "." + html.EscapeString(cfg.BaseDomain)
-		} else {
-			url = "/t/" + html.EscapeString(t.ID) + "/"
+		byMode[t.Mode]++
+	}
+
+	io.WriteString(w, publicPageHeadOpen)
+	io.WriteString(w, publicPageStyles)
+	io.WriteString(w, publicPageHeadClose)
+
+	fmt.Fprintf(w, `<section class="kpis" aria-label="summary">
+<div class="kpi cyan"><h3>Active Tunnels</h3><div class="v">%d</div><div class="sub">live channels</div></div>
+<div class="kpi magenta"><h3>HTTP</h3><div class="v">%d</div><div class="sub">L7 sessions</div></div>
+<div class="kpi"><h3>TCP</h3><div class="v">%d</div><div class="sub">L4 streams</div></div>
+<div class="kpi lime"><h3>UDP</h3><div class="v">%d</div><div class="sub">datagram</div></div>
+</section>
+<div class="section-head"><h2>Channels</h2><span class="meta">read-only public view</span></div>
+<div class="grid">`,
+		len(tunnels), byMode["http"], byMode["tcp"], byMode["udp"])
+
+	now := time.Now()
+	for _, t := range tunnels {
+		mode := t.Mode
+		if mode == "" {
+			mode = "http"
 		}
-		fmt.Fprintf(w, `<tr><td class="id">%s</td><td><span class="badge">%s</span></td><td><a href="%s">%s</a></td></tr>`,
+		var url, endpoint string
+		switch {
+		case t.PublicURL != "":
+			url = t.PublicURL
+		case cfg.BaseDomain != "":
+			url = "https://" + t.ID + "." + cfg.BaseDomain
+		default:
+			url = "/t/" + t.ID + "/"
+		}
+		switch {
+		case t.TCPAddr != "":
+			endpoint = t.TCPAddr
+		case t.UDPAddr != "":
+			endpoint = t.UDPAddr
+		default:
+			endpoint = url
+		}
+		connected := t.ConnectedAt.UTC().Format("2006-01-02 15:04 UTC")
+		uptime := now.Sub(t.ConnectedAt).Round(time.Second).String()
+
+		fmt.Fprintf(w, `<article class="card">
+<span class="corner tl"></span><span class="corner tr"></span><span class="corner bl"></span><span class="corner br"></span>
+<div class="card-head"><span class="live" aria-hidden="true"></span><span class="id">%s</span><span class="badge %s">%s</span></div>
+<div class="url-row"><a href="%s" target="_blank" rel="noopener">%s</a><button class="copy" data-copy="%s">copy</button></div>
+<dl class="specs">
+<div class="spec"><dt>Endpoint</dt><dd title="%s">%s</dd></div>
+<div class="spec"><dt>Uptime</dt><dd class="uptime" data-uptime="%d">%s</dd></div>
+<div class="spec"><dt>Connected</dt><dd>%s</dd></div>
+<div class="spec"><dt>Protocol</dt><dd>%s</dd></div>
+</dl>
+</article>`,
 			html.EscapeString(t.ID),
-			html.EscapeString(t.Mode),
-			url,
-			html.EscapeString(url),
+			html.EscapeString(mode), html.EscapeString(strings.ToUpper(mode)),
+			html.EscapeString(url), html.EscapeString(url), html.EscapeString(url),
+			html.EscapeString(endpoint), html.EscapeString(endpoint),
+			t.ConnectedAt.Unix(), html.EscapeString(uptime),
+			html.EscapeString(connected),
+			html.EscapeString(strings.ToUpper(mode)),
 		)
 	}
-	fmt.Fprint(w, tunnelListPageFooter)
+
+	io.WriteString(w, `</div>`)
+	io.WriteString(w, publicPageFooter)
 }
