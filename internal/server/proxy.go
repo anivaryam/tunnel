@@ -738,10 +738,11 @@ main{position:relative;z-index:2;max-width:1280px;margin:0 auto;padding:24px cla
 .spec dt{font-size:9px;letter-spacing:.24em;color:var(--fg-dim);text-transform:uppercase}
 .spec dd{font-size:12px;color:var(--fg);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .spec dd.uptime{color:var(--accent);font-family:'Orbitron',sans-serif;letter-spacing:.08em}
-.hero{position:relative;display:grid;grid-template-columns:minmax(0,360px) 1fr;gap:20px;align-items:stretch;margin-bottom:24px}
+.hero{position:relative;display:grid;grid-template-columns:minmax(0,360px) 1fr;gap:20px;align-items:stretch;margin-bottom:24px;min-height:380px}
 .hero .frame{position:relative;border:1px solid var(--line);border-radius:14px;overflow:hidden;
   background:radial-gradient(circle at 30% 30%,rgba(255,43,214,.12),transparent 60%),linear-gradient(180deg,rgba(8,13,24,.85),rgba(8,13,24,.55));
-  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);min-height:280px;display:grid;place-items:center;padding:12px}
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);min-height:380px;height:380px;display:grid;place-items:center;padding:12px}
+.hero .frame dotlottie-player,.hero .frame lottie-player{height:100%}
 .hero .frame::before,.hero .frame::after{content:"";position:absolute;left:0;right:0;height:24px;pointer-events:none;z-index:2}
 .hero .frame::before{top:0;background:linear-gradient(180deg,rgba(4,6,11,.7),transparent)}
 .hero .frame::after{bottom:0;background:linear-gradient(0deg,rgba(4,6,11,.7),transparent)}
@@ -764,7 +765,8 @@ main{position:relative;z-index:2;max-width:1280px;margin:0 auto;padding:24px cla
 @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.55;transform:scale(.85)}}
 @keyframes blink{50%{opacity:0}}
 @media (max-width:900px){
-  .hero{grid-template-columns:1fr}
+  .hero{grid-template-columns:1fr;min-height:0}
+  .hero .frame{height:300px;min-height:300px}
   .hero lottie-player,.hero dotlottie-player{max-height:260px}
 }
 @media (max-width:720px){
