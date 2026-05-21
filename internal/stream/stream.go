@@ -81,6 +81,13 @@ func (r *Registry) Remove(id string) {
 	delete(r.streams, id)
 }
 
+// Len returns the current number of registered streams.
+func (r *Registry) Len() int {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return len(r.streams)
+}
+
 // CloseAll closes and removes all streams.
 func (r *Registry) CloseAll() {
 	r.mu.Lock()

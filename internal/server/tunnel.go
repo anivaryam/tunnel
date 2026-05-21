@@ -54,11 +54,22 @@ var cachedResponseTimeout = func() time.Duration {
 // responseTimeout returns the configured response timeout, resolved once.
 func responseTimeout() time.Duration { return cachedResponseTimeout }
 
+// TunnelStats is a point-in-time snapshot of a tunnel's activity counters.
+type TunnelStats struct {
+	ActiveStreams   int
+	PendingRequests int
+	WSStreams       int
+	SSEStreams      int
+}
+
 // Tunnel represents a single client connection and its pending request/response pairs.
 type Tunnel struct {
 	ID          string
 	Mode        string // "http", "tcp", or "udp"
 	RemoteAddr  string
+	PublicURL   string // populated after registration; empty until then
+	TCPAddr     string // public TCP listen address, mode == "tcp" only
+	UDPAddr     string // public UDP listen address, mode == "udp" only
 	ConnectedAt time.Time
 	Conn        *websocket.Conn
 	Writer      *protocol.ConnWriter
@@ -99,6 +110,18 @@ func NewTunnel(id, mode string, conn *websocket.Conn) *Tunnel {
 // Streams returns the tunnel's stream registry.
 func (t *Tunnel) Streams() *stream.Registry {
 	return t.streams
+}
+
+// Stats returns a point-in-time snapshot of the tunnel's activity counters.
+func (t *Tunnel) Stats() TunnelStats {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return TunnelStats{
+		ActiveStreams:   t.streams.Len(),
+		PendingRequests: len(t.pending),
+		WSStreams:       len(t.wsStreams),
+		SSEStreams:      len(t.sseStreams),
+	}
 }
 
 // sendRequest sends an HTTP request envelope + body to the client and returns a channel

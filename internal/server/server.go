@@ -300,6 +300,7 @@ func wsConnectHandler(hub *Hub, auth *Auth, cfg Config, metrics *Metrics, limite
 			PublicURL: publicURL,
 			Mode:      mode,
 		}
+		tunnel.PublicURL = publicURL
 
 		// Start a per-tunnel proxy for TCP/UDP modes.
 		var tcpProxy *TCPProxy
@@ -317,6 +318,7 @@ func wsConnectHandler(hub *Hub, auth *Auth, cfg Config, metrics *Metrics, limite
 			go tcpProxy.Serve()
 			port := tcpProxy.Addr().(*net.TCPAddr).Port
 			assignmentPayload.TCPAddr = fmt.Sprintf("%s:%d", publicHost, port)
+			tunnel.TCPAddr = assignmentPayload.TCPAddr
 			log.Printf("[ws] tunnel %s: TCP proxy on port %d", tunnelID, port)
 
 		case "udp":
@@ -330,6 +332,7 @@ func wsConnectHandler(hub *Hub, auth *Auth, cfg Config, metrics *Metrics, limite
 			go udpProxy.Serve()
 			port := udpProxy.Addr().(*net.UDPAddr).Port
 			assignmentPayload.UDPAddr = fmt.Sprintf("%s:%d", publicHost, port)
+			tunnel.UDPAddr = assignmentPayload.UDPAddr
 			log.Printf("[ws] tunnel %s: UDP proxy on port %d", tunnelID, port)
 		}
 
