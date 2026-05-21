@@ -2,6 +2,8 @@
 
 A self-hosted ngrok alternative. Expose local servers to the internet through a relay server you control.
 
+![Public relay landing page](docs/screenshots/landing.png)
+
 ```
 Browser → Relay Server → WebSocket → CLI Client → localhost
 ```
