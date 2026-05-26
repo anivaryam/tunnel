@@ -30,8 +30,10 @@ fi
 
 # Download
 EXT="tar.gz"
+BIN="tunnel"
 if [ "$OS" = "windows" ]; then
   EXT="zip"
+  BIN="tunnel.exe"
 fi
 
 ASSET="tunnel_${OS}_${ARCH}.${EXT}"
@@ -73,13 +75,13 @@ fi
 
 # Install
 if [ -w "$INSTALL_DIR" ]; then
-  mv "${TMP}/tunnel" "${INSTALL_DIR}/tunnel"
+  mv "${TMP}/${BIN}" "${INSTALL_DIR}/${BIN}"
 else
-  sudo mv "${TMP}/tunnel" "${INSTALL_DIR}/tunnel"
+  sudo mv "${TMP}/${BIN}" "${INSTALL_DIR}/${BIN}"
 fi
 
-chmod +x "${INSTALL_DIR}/tunnel"
-echo "tunnel ${VERSION} installed to ${INSTALL_DIR}/tunnel"
+chmod +x "${INSTALL_DIR}/${BIN}"
+echo "tunnel ${VERSION} installed to ${INSTALL_DIR}/${BIN}"
 
 # Install man pages best-effort. ${HOME}/.local/share/man is on MANPATH for most
 # distros; users who prefer system-wide can rerun with sudo and MAN_DIR=/usr/local/share/man.
