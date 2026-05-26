@@ -842,7 +842,7 @@ func TestRefererFallback(t *testing.T) {
 			t.Errorf("status: got %d, want 200", resp.StatusCode)
 		}
 		body, _ := io.ReadAll(resp.Body)
-		if !strings.Contains(string(body), "Active tunnels") {
+		if !strings.Contains(string(body), "Active Tunnels") {
 			t.Error("expected tunnel list page in response")
 		}
 	})
