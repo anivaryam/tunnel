@@ -882,13 +882,26 @@ func renderNoTunnelPage(w http.ResponseWriter) {
 	renderNoTunnelPageWithHero(w, "")
 }
 
+func writePublicPageString(w http.ResponseWriter, s string) bool {
+	_, err := io.WriteString(w, s)
+	return err == nil
+}
+
 func renderNoTunnelPageWithHero(w http.ResponseWriter, lottieURL string) {
-	io.WriteString(w, publicPageHeadOpen)
-	io.WriteString(w, publicPageStyles)
-	io.WriteString(w, publicPageHeadClose)
+	if !writePublicPageString(w, publicPageHeadOpen) {
+		return
+	}
+	if !writePublicPageString(w, publicPageStyles) {
+		return
+	}
+	if !writePublicPageString(w, publicPageHeadClose) {
+		return
+	}
 	renderHero(w, lottieURL)
-	io.WriteString(w, `<div class="empty"><span class="big">No tunnel connected</span>Awaiting handshake <span class="blink">_</span><br><br>Start one with<br><code>tunnel http &lt;port&gt;</code></div>`)
-	io.WriteString(w, publicPageFooter)
+	if !writePublicPageString(w, `<div class="empty"><span class="big">No tunnel connected</span>Awaiting handshake <span class="blink">_</span><br><br>Start one with<br><code>tunnel http &lt;port&gt;</code></div>`) {
+		return
+	}
+	writePublicPageString(w, publicPageFooter)
 }
 
 func renderTunnelListPage(w http.ResponseWriter, tunnels []*Tunnel, cfg Config) {
@@ -902,9 +915,15 @@ func renderTunnelListPage(w http.ResponseWriter, tunnels []*Tunnel, cfg Config) 
 		byMode[t.Mode]++
 	}
 
-	io.WriteString(w, publicPageHeadOpen)
-	io.WriteString(w, publicPageStyles)
-	io.WriteString(w, publicPageHeadClose)
+	if !writePublicPageString(w, publicPageHeadOpen) {
+		return
+	}
+	if !writePublicPageString(w, publicPageStyles) {
+		return
+	}
+	if !writePublicPageString(w, publicPageHeadClose) {
+		return
+	}
 	renderHero(w, cfg.HeroLottieURL)
 
 	fmt.Fprintf(w, `<section class="kpis" aria-label="summary">
@@ -964,6 +983,8 @@ func renderTunnelListPage(w http.ResponseWriter, tunnels []*Tunnel, cfg Config) 
 		)
 	}
 
-	io.WriteString(w, `</div>`)
-	io.WriteString(w, publicPageFooter)
+	if !writePublicPageString(w, `</div>`) {
+		return
+	}
+	writePublicPageString(w, publicPageFooter)
 }
