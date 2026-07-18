@@ -217,7 +217,8 @@ With subdomain routing each app gets its own browser origin, so cookies, WebSock
 
 | Variable | Required | Description |
 |---|---|---|
-| `TUNNEL_AUTH_TOKENS` | Yes | Comma-separated list of valid auth tokens |
+| `TUNNEL_AUTH_TOKENS` | Yes | Comma-separated list of valid auth tokens. Server startup fails when empty unless `TUNNEL_ALLOW_OPEN=true` is set |
+| `TUNNEL_ALLOW_OPEN` | No | Set to `true` only when intentionally running an unauthenticated open relay |
 | `PORT` | No | HTTP server port (default `8080`) |
 | `PUBLIC_HOST` | No | Hostname for TCP/UDP addresses sent to clients. Derived from HTTP `Host` header if unset |
 | `BASE_DOMAIN` | No | Enables subdomain routing. Set to your relay domain (e.g. `tunnel.example.com`). Tunnels become `{id}.tunnel.example.com` |

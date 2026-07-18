@@ -161,7 +161,22 @@ func (t *Tunnel) waitResponse(ch chan pendingResponse, requestID string) (protoc
 		t.mu.Lock()
 		delete(t.pending, requestID)
 		t.mu.Unlock()
+		t.cancelHTTPRequest(requestID)
 		return protocol.Envelope{}, nil, fmt.Errorf("response timeout after %s", timeout)
+	}
+}
+
+func (t *Tunnel) cancelHTTPRequest(requestID string) {
+	if t.Writer == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), pingWriteTimeout)
+	defer cancel()
+	if err := t.Writer.WriteEnvelope(ctx, protocol.Envelope{
+		Type:             protocol.TypeHTTPStreamCancel,
+		HTTPStreamCancel: &protocol.HTTPStreamCancelPayload{RequestID: requestID},
+	}, nil); err != nil {
+		log.Printf("[tunnel %s] write request cancel: %v", t.ID, err)
 	}
 }
 

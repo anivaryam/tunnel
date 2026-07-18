@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -20,6 +21,11 @@ func main() {
 }
 
 func run() int {
+	if err := requireAuthConfig(); err != nil {
+		log.Print(err)
+		return 1
+	}
+
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
@@ -55,7 +61,6 @@ func run() int {
 		Handler:           s.Handler,
 		ReadTimeout:       30 * time.Second,
 		ReadHeaderTimeout: 10 * time.Second,
-		WriteTimeout:      60 * time.Second,
 		IdleTimeout:       120 * time.Second,
 		MaxHeaderBytes:    32 << 10,
 	}
@@ -87,4 +92,14 @@ func run() int {
 	cancel()
 	log.Println("server stopped")
 	return 0
+}
+
+func requireAuthConfig() error {
+	if strings.TrimSpace(os.Getenv("TUNNEL_AUTH_TOKENS")) != "" {
+		return nil
+	}
+	if strings.EqualFold(os.Getenv("TUNNEL_ALLOW_OPEN"), "true") {
+		return nil
+	}
+	return fmt.Errorf("TUNNEL_AUTH_TOKENS is required; set TUNNEL_ALLOW_OPEN=true only for an intentional open relay")
 }

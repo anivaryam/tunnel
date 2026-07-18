@@ -73,6 +73,8 @@ func TestIntegration(t *testing.T) {
 	// Extract port from local server URL.
 	localPort := strings.TrimPrefix(local.URL, "http://127.0.0.1:")
 	localPort = strings.TrimPrefix(localPort, "http://localhost:")
+	var portInt int
+	fmt.Sscanf(localPort, "%d", &portInt)
 
 	// 2. Start the relay server.
 	t.Setenv("TUNNEL_AUTH_TOKENS", "test-token")
@@ -81,56 +83,13 @@ func TestIntegration(t *testing.T) {
 	relay := httptest.NewServer(relaySrv.Handler)
 	defer relay.Close()
 
-	// 3. Connect a tunnel client via WebSocket.
+	// 3. Connect a tunnel client.
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	wsURL := "ws" + strings.TrimPrefix(relay.URL, "http") + "/ws/connect?token=test-token"
-	conn, _, err := websocket.Dial(ctx, wsURL, nil)
-	if err != nil {
-		t.Fatalf("dial relay: %v", err)
-	}
-	defer conn.CloseNow()
-
-	conn.SetReadLimit(protocol.MaxBodySize + 4096)
-
-	// Read assignment.
-	assignment, err := protocol.ReadEnvelopeOnly(ctx, conn)
-	if err != nil {
-		t.Fatalf("read assignment: %v", err)
-	}
-	if assignment.Assignment == nil {
-		t.Fatal("expected assignment")
-	}
-	tunnelID := assignment.Assignment.TunnelID
+	tunnelID, stopClient := connectHTTPTunnel(ctx, t, relay.URL, portInt)
+	defer stopClient()
 	t.Logf("tunnel ID: %s", tunnelID)
-
-	// Start a goroutine that acts as the tunnel client: reads requests and forwards them locally.
-	var portInt int
-	fmt.Sscanf(localPort, "%d", &portInt)
-
-	cw := protocol.NewConnWriter(conn)
-
-	clientDone := make(chan struct{})
-	go func() {
-		defer close(clientDone)
-		for {
-			env, body, err := protocol.ReadEnvelope(ctx, conn)
-			if err != nil {
-				return
-			}
-			go func(env protocol.Envelope, body []byte) {
-				respEnv, respBody, err := client.ForwardRequest(portInt, env, body)
-				if err != nil {
-					t.Logf("forward error: %v", err)
-					return
-				}
-				if err := cw.WriteEnvelope(ctx, respEnv, respBody); err != nil {
-					t.Logf("write response error: %v", err)
-				}
-			}(env, body)
-		}
-	}()
 
 	waitForTunnel(t, relaySrv.Hub, tunnelID)
 
@@ -345,47 +304,28 @@ func TestHealthEndpoint(t *testing.T) {
 	}
 }
 
-// connectHTTPTunnel is a helper that connects a tunnel client in HTTP mode,
-// starts a forwarding loop, and returns the tunnel ID. The caller should
-// defer conn.CloseNow().
-func connectHTTPTunnel(ctx context.Context, t *testing.T, relayURL string, localPort int) (string, *websocket.Conn) {
+// connectHTTPTunnel runs a real HTTP tunnel client and returns the tunnel ID.
+// The caller should defer the returned cancel function.
+func connectHTTPTunnel(ctx context.Context, t *testing.T, relayURL string, localPort int) (string, context.CancelFunc) {
 	t.Helper()
-	wsURL := "ws" + strings.TrimPrefix(relayURL, "http") + "/ws/connect?token=test-token"
-	conn, _, err := websocket.Dial(ctx, wsURL, nil)
-	if err != nil {
-		t.Fatalf("dial relay: %v", err)
-	}
-	conn.SetReadLimit(protocol.MaxBodySize + 4096)
-
-	assignment, err := protocol.ReadEnvelopeOnly(ctx, conn)
-	if err != nil {
-		conn.CloseNow()
-		t.Fatalf("read assignment: %v", err)
-	}
-	if assignment.Assignment == nil {
-		conn.CloseNow()
-		t.Fatal("expected assignment")
-	}
-	tunnelID := assignment.Assignment.TunnelID
-
-	cw := protocol.NewConnWriter(conn)
+	clientCtx, cancel := context.WithCancel(ctx)
+	c := client.NewClient("ws"+strings.TrimPrefix(relayURL, "http"), "test-token", localPort)
 	go func() {
-		for {
-			env, body, err := protocol.ReadEnvelope(ctx, conn)
-			if err != nil {
-				return
-			}
-			go func(env protocol.Envelope, body []byte) {
-				respEnv, respBody, err := client.ForwardRequest(localPort, env, body)
-				if err != nil {
-					return
-				}
-				cw.WriteEnvelope(ctx, respEnv, respBody)
-			}(env, body)
+		if err := c.Run(clientCtx); err != nil && clientCtx.Err() == nil {
+			t.Logf("client run: %v", err)
 		}
 	}()
 
-	return tunnelID, conn
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if id := c.TunnelID(); id != "" {
+			return id, cancel
+		}
+		time.Sleep(2 * time.Millisecond)
+	}
+	cancel()
+	t.Fatal("client did not connect within 2s")
+	return "", func() {}
 }
 
 func TestMultipleHTTPTunnels(t *testing.T) {
@@ -412,11 +352,11 @@ func TestMultipleHTTPTunnels(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	id1, conn1 := connectHTTPTunnel(ctx, t, relay.URL, port1)
-	defer conn1.CloseNow()
+	id1, stop1 := connectHTTPTunnel(ctx, t, relay.URL, port1)
+	defer stop1()
 
-	id2, conn2 := connectHTTPTunnel(ctx, t, relay.URL, port2)
-	defer conn2.CloseNow()
+	id2, stop2 := connectHTTPTunnel(ctx, t, relay.URL, port2)
+	defer stop2()
 
 	t.Logf("tunnel 1: %s → port %d", id1, port1)
 	t.Logf("tunnel 2: %s → port %d", id2, port2)
@@ -494,8 +434,8 @@ func TestSubdomainRouting(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	tunnelID, conn := connectHTTPTunnel(ctx, t, relay.URL, localPort)
-	defer conn.CloseNow()
+	tunnelID, stopClient := connectHTTPTunnel(ctx, t, relay.URL, localPort)
+	defer stopClient()
 	t.Logf("tunnel ID: %s", tunnelID)
 
 	waitForTunnel(t, relaySrv.Hub, tunnelID)
@@ -802,8 +742,8 @@ func TestRefererFallback(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	tunnelID, conn := connectHTTPTunnel(ctx, t, relay.URL, localPort)
-	defer conn.CloseNow()
+	tunnelID, stopClient := connectHTTPTunnel(ctx, t, relay.URL, localPort)
+	defer stopClient()
 	waitForTunnel(t, relaySrv.Hub, tunnelID)
 
 	t.Run("absolute path with Referer redirects to tunnel", func(t *testing.T) {
@@ -893,8 +833,8 @@ func TestWSRewriteInjection(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	tunnelID, conn := connectHTTPTunnel(ctx, t, relay.URL, localPort)
-	defer conn.CloseNow()
+	tunnelID, stopClient := connectHTTPTunnel(ctx, t, relay.URL, localPort)
+	defer stopClient()
 	waitForTunnel(t, relaySrv.Hub, tunnelID)
 
 	t.Run("HTML response contains WS rewrite script", func(t *testing.T) {
@@ -1026,8 +966,8 @@ func TestSubdomainNoInjection(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	tunnelID, conn := connectHTTPTunnel(ctx, t, relay.URL, localPort)
-	defer conn.CloseNow()
+	tunnelID, stopClient := connectHTTPTunnel(ctx, t, relay.URL, localPort)
+	defer stopClient()
 	waitForTunnel(t, relaySrv.Hub, tunnelID)
 
 	t.Run("subdomain HTML has no WS rewrite injection", func(t *testing.T) {
@@ -1350,7 +1290,7 @@ func TestSSEStreaming(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// Use a real Client (not the manual ForwardRequest loop) so the SSE
+	// Use a real Client (not a manual websocket loop) so the SSE
 	// streaming path in handleRequest is exercised.
 	c := client.NewClient("ws"+strings.TrimPrefix(relay.URL, "http"), "", localPort)
 	go c.Run(ctx)

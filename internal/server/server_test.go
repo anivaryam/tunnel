@@ -1,10 +1,15 @@
 package server
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/anivaryam/tunnel/internal/protocol"
+	"github.com/coder/websocket"
 )
 
 func testSubdomainHandler(cfg Config) (http.Handler, *Hub) {
@@ -224,5 +229,74 @@ func TestSingleTunnelModeAllowsFirstConnection(t *testing.T) {
 	// Any response other than 409 means the guard correctly passed.
 	if resp.StatusCode == http.StatusConflict {
 		t.Error("single-tunnel guard must not fire when hub is empty")
+	}
+}
+
+func TestWSConnectRejectsInvalidMode(t *testing.T) {
+	hub := NewHub()
+	cfg := Config{}
+	auth := NewAuth()
+	metrics := NewMetrics()
+	limiter := NewRateLimiter()
+	defer limiter.Close()
+
+	srv := httptest.NewServer(wsConnectHandler(hub, auth, cfg, metrics, limiter))
+	defer srv.Close()
+
+	resp, err := http.Get(srv.URL + "/ws/connect?mode=ssh")
+	if err != nil {
+		t.Fatalf("request failed: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("expected 400 Bad Request, got %d", resp.StatusCode)
+	}
+}
+
+func TestWaitResponseTimeoutSendsCancel(t *testing.T) {
+	oldTimeout := cachedResponseTimeout
+	cachedResponseTimeout = 10 * time.Millisecond
+	t.Cleanup(func() { cachedResponseTimeout = oldTimeout })
+
+	serverConn := make(chan *websocket.Conn, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := websocket.Accept(w, r, nil)
+		if err != nil {
+			return
+		}
+		serverConn <- conn
+		<-r.Context().Done()
+	}))
+	defer srv.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	clientConn, _, err := websocket.Dial(ctx, "ws"+strings.TrimPrefix(srv.URL, "http"), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer clientConn.CloseNow()
+
+	var conn *websocket.Conn
+	select {
+	case conn = <-serverConn:
+	case <-ctx.Done():
+		t.Fatal(ctx.Err())
+	}
+	defer conn.CloseNow()
+
+	tunnel := NewTunnel("test", "http", conn)
+	_, _, err = tunnel.waitResponse(make(chan pendingResponse), "req-timeout")
+	if err == nil || !strings.Contains(err.Error(), "response timeout") {
+		t.Fatalf("expected response timeout, got %v", err)
+	}
+
+	env, _, err := protocol.ReadEnvelope(ctx, clientConn)
+	if err != nil {
+		t.Fatalf("read cancel envelope: %v", err)
+	}
+	if env.Type != protocol.TypeHTTPStreamCancel || env.HTTPStreamCancel == nil || env.HTTPStreamCancel.RequestID != "req-timeout" {
+		t.Fatalf("unexpected cancel envelope: %#v", env)
 	}
 }

@@ -184,6 +184,16 @@ func wsConnectHandler(hub *Hub, auth *Auth, cfg Config, metrics *Metrics, limite
 			return
 		}
 
+		mode := r.URL.Query().Get("mode")
+		switch mode {
+		case "":
+			mode = "http"
+		case "http", "tcp", "udp":
+		default:
+			http.Error(w, "invalid tunnel mode", http.StatusBadRequest)
+			return
+		}
+
 		if cfg.SingleTunnelMode && hub.Count() > 0 {
 			http.Error(w, "single tunnel mode: a tunnel is already connected", http.StatusConflict)
 			return
@@ -224,11 +234,6 @@ func wsConnectHandler(hub *Hub, auth *Auth, cfg Config, metrics *Metrics, limite
 		}
 
 		conn.SetReadLimit(protocol.MaxBodySize + 4096)
-
-		mode := r.URL.Query().Get("mode")
-		if mode == "" {
-			mode = "http"
-		}
 
 		// Resolve tunnel ID. Priority:
 		//   1. Explicit ?name= request (validated, atomically claimed)

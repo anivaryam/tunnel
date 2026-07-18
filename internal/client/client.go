@@ -61,10 +61,10 @@ type Client struct {
 	wsMu    sync.RWMutex
 	wsConns map[string]*websocket.Conn
 
-	// SSE / response streaming: cancel functions keyed by request ID so the server's
-	// TypeHTTPStreamCancel message can abort the local HTTP connection.
-	sseMu      sync.Mutex
-	sseCancels map[string]context.CancelFunc
+	// Request cancel functions keyed by request ID so the server's
+	// TypeHTTPStreamCancel message can abort local HTTP work.
+	requestMu      sync.Mutex
+	requestCancels map[string]context.CancelFunc
 
 	// Upload streaming: pipe writers keyed by request ID.
 	// TypeHTTPRequestChunk messages are written to the pipe; TypeHTTPRequestEnd closes it.
@@ -73,6 +73,40 @@ type Client struct {
 
 	// inflight bounds concurrent handleRequest goroutines.
 	inflight chan struct{}
+}
+
+// resetConnState releases all per-connection stream bookkeeping. It is called
+// when a connection ends (disconnect or shutdown) so the maps don't accumulate
+// stale, unreachable entries across reconnects. Each map is drained under its
+// own lock and the entries are actively closed/cancelled (not just dropped) so
+// any local goroutines blocked on them unwind.
+func (c *Client) resetConnState() {
+	c.wsMu.Lock()
+	for id, conn := range c.wsConns {
+		if conn != nil {
+			conn.Close(websocket.StatusGoingAway, "tunnel disconnected")
+		}
+		delete(c.wsConns, id)
+	}
+	c.wsMu.Unlock()
+
+	c.requestMu.Lock()
+	for id, cancel := range c.requestCancels {
+		if cancel != nil {
+			cancel()
+		}
+		delete(c.requestCancels, id)
+	}
+	c.requestMu.Unlock()
+
+	c.reqPipesMu.Lock()
+	for id, pw := range c.reqPipes {
+		if pw != nil {
+			pw.CloseWithError(fmt.Errorf("tunnel disconnected"))
+		}
+		delete(c.reqPipes, id)
+	}
+	c.reqPipesMu.Unlock()
 }
 
 // TunnelID returns the tunnel ID assigned by the server, or "" if not yet connected.
@@ -85,16 +119,16 @@ func (c *Client) TunnelID() string {
 // NewClient creates a new tunnel client.
 func NewClient(serverURL, token string, localPort int) *Client {
 	return &Client{
-		ServerURL:  serverURL,
-		Token:      token,
-		LocalPort:  localPort,
-		Mode:       "http",
-		Display:    NewDisplay(),
-		streams:    stream.NewRegistry(),
-		wsConns:    make(map[string]*websocket.Conn),
-		sseCancels: make(map[string]context.CancelFunc),
-		reqPipes:   make(map[string]*io.PipeWriter),
-		inflight:   make(chan struct{}, maxInflightRequests),
+		ServerURL:      serverURL,
+		Token:          token,
+		LocalPort:      localPort,
+		Mode:           "http",
+		Display:        NewDisplay(),
+		streams:        stream.NewRegistry(),
+		wsConns:        make(map[string]*websocket.Conn),
+		requestCancels: make(map[string]context.CancelFunc),
+		reqPipes:       make(map[string]*io.PipeWriter),
+		inflight:       make(chan struct{}, maxInflightRequests),
 	}
 }
 
@@ -243,6 +277,11 @@ func (c *Client) connectAndServe(ctx context.Context) (connectedOK bool, err err
 	c.conn = conn
 	c.writer = protocol.NewConnWriter(conn)
 
+	// Tear down any per-connection stream state when this connection ends so a
+	// reconnect starts clean instead of leaking ws conns, request cancels, and
+	// upload pipes keyed by request IDs that will never arrive again.
+	defer c.resetConnState()
+
 	// Read the tunnel assignment.
 	assignment, assignErr := protocol.ReadEnvelopeOnly(ctx, conn)
 	if assignErr != nil {
@@ -343,7 +382,7 @@ func (c *Client) connectAndServe(ctx context.Context) (connectedOK bool, err err
 			c.handleWSClose(env)
 		case protocol.TypeHTTPStreamCancel:
 			if env.HTTPStreamCancel != nil {
-				c.cancelSSEStream(env.HTTPStreamCancel.RequestID)
+				c.cancelRequest(env.HTTPStreamCancel.RequestID)
 			}
 		default:
 			log.Printf("unknown message type: %s", env.Type)
@@ -418,10 +457,18 @@ func (c *Client) handleRequest(ctx context.Context, env protocol.Envelope, bodyR
 	}
 
 	// Create a per-request cancellable context so TypeHTTPStreamCancel (sent by
-	// the server when the browser closes an SSE/streaming connection) can abort
-	// the local HTTP request and free the goroutine.
+	// the server when the browser closes a stream or a relay timeout fires) can
+	// abort the local HTTP request and free the goroutine.
 	reqCtx, reqCancel := context.WithCancel(ctx)
-	defer reqCancel()
+	c.requestMu.Lock()
+	c.requestCancels[env.RequestID] = reqCancel
+	c.requestMu.Unlock()
+	defer func() {
+		c.requestMu.Lock()
+		delete(c.requestCancels, env.RequestID)
+		c.requestMu.Unlock()
+		reqCancel()
+	}()
 
 	httpReq, err := http.NewRequestWithContext(reqCtx, req.Method, localURL, bodyReader)
 	if err != nil {
@@ -478,17 +525,6 @@ func (c *Client) handleRequest(ctx context.Context, env protocol.Envelope, bodyR
 	shouldStream := isSSE || (!isHTML && (resp.ContentLength < 0 || resp.ContentLength > downloadStreamThreshold))
 
 	if shouldStream {
-		if isSSE {
-			// Register the cancel so readLoop can abort this goroutine on demand.
-			c.sseMu.Lock()
-			c.sseCancels[env.RequestID] = reqCancel
-			c.sseMu.Unlock()
-			defer func() {
-				c.sseMu.Lock()
-				delete(c.sseCancels, env.RequestID)
-				c.sseMu.Unlock()
-			}()
-		}
 		c.streamResponse(reqCtx, env, resp, respHeaders, start)
 		return
 	}
@@ -579,15 +615,14 @@ func (c *Client) streamResponse(ctx context.Context, env protocol.Envelope, resp
 	}
 }
 
-// cancelSSEStream cancels the local HTTP request for a streaming response.
-// Called when the server sends TypeHTTPStreamCancel (browser disconnected).
-func (c *Client) cancelSSEStream(requestID string) {
-	c.sseMu.Lock()
-	cancel, ok := c.sseCancels[requestID]
+// cancelRequest cancels local HTTP work for a request ID.
+func (c *Client) cancelRequest(requestID string) {
+	c.requestMu.Lock()
+	cancel, ok := c.requestCancels[requestID]
 	if ok {
-		delete(c.sseCancels, requestID)
+		delete(c.requestCancels, requestID)
 	}
-	c.sseMu.Unlock()
+	c.requestMu.Unlock()
 	if ok {
 		cancel()
 	}

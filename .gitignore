@@ -6,3 +6,7 @@ CLAUDE.md
 /tunnel
 .worktrees/
 .gen/
+.codebase-memory/
+graphify-out/
+.playwright-mcp/
+.sisyphus/

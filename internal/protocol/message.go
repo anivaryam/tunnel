@@ -25,7 +25,8 @@ type Envelope struct {
 
 	// HTTP response streaming messages (SSE / chunked downloads).
 	// Flow: client sends HTTPResponse{Streaming:true} → chunks → HTTPStreamEnd.
-	// Server sends HTTPStreamCancel to abort the local connection when the browser disconnects.
+	// Server sends HTTPStreamCancel to abort local HTTP work when the browser
+	// disconnects or the relay stops waiting for a response.
 	HTTPStreamChunk  *HTTPStreamChunkPayload  `json:"http_stream_chunk,omitempty"`
 	HTTPStreamEnd    *HTTPStreamEndPayload    `json:"http_stream_end,omitempty"`
 	HTTPStreamCancel *HTTPStreamCancelPayload `json:"http_stream_cancel,omitempty"`
@@ -98,8 +99,8 @@ type HTTPStreamEndPayload struct {
 	RequestID string `json:"request_id"`
 }
 
-// HTTPStreamCancelPayload is sent server→client when the browser closes a
-// streaming connection, so the client can cancel the local HTTP request.
+// HTTPStreamCancelPayload is sent server→client so the client can cancel the
+// local HTTP request for a closed stream or timed-out relay request.
 type HTTPStreamCancelPayload struct {
 	RequestID string `json:"request_id"`
 }
