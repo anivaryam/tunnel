@@ -89,12 +89,18 @@ func (w *Writer) rotateLocked() error {
 	for i := w.maxFiles; i >= 1; i-- {
 		old := fmt.Sprintf("%s.%d", w.path, i)
 		if i == w.maxFiles {
-			os.Remove(old)
+			if err := os.Remove(old); err != nil && !os.IsNotExist(err) {
+				return fmt.Errorf("rotate remove %s: %w", old, err)
+			}
 		} else {
-			os.Rename(old, fmt.Sprintf("%s.%d", w.path, i+1))
+			if err := os.Rename(old, fmt.Sprintf("%s.%d", w.path, i+1)); err != nil && !os.IsNotExist(err) {
+				return fmt.Errorf("rotate rename %s: %w", old, err)
+			}
 		}
 	}
-	os.Rename(w.path, w.path+".1")
+	if err := os.Rename(w.path, w.path+".1"); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("rotate rename %s: %w", w.path, err)
+	}
 
 	f, err := os.OpenFile(w.path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0600)
 	if err != nil {

@@ -32,11 +32,17 @@ func runDoctor(serverFlag, tokenFlag string) error {
 	pass, fail, warn := green("✓"), red("✗"), yellow("!")
 
 	fmt.Printf("config file: %s\n", cfgPath)
-	if _, statErr := os.Stat(cfgPath); os.IsNotExist(statErr) {
+	// Lstat (not Stat) so a symlinked config can't mask the real file's mode,
+	// and so a symlink itself is flagged rather than silently followed.
+	info, statErr := os.Lstat(cfgPath)
+	switch {
+	case os.IsNotExist(statErr):
 		fmt.Printf("  %s config file does not exist — run `tunnel config set-server <url>`\n", warn)
-	} else if info, _ := os.Stat(cfgPath); info != nil && info.Mode().Perm()&0o077 != 0 {
+	case info != nil && info.Mode()&os.ModeSymlink != 0:
+		fmt.Printf("  %s config is a symlink — refusing to trust its permissions; replace with a regular file\n", warn)
+	case info != nil && info.Mode().Perm()&0o077 != 0:
 		fmt.Printf("  %s mode %o — token is readable by other users; recommended 0600\n", warn, info.Mode().Perm())
-	} else {
+	default:
 		fmt.Printf("  %s permissions OK\n", pass)
 	}
 

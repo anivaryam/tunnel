@@ -106,7 +106,9 @@ func (up *UDPProxy) SendToRemote(streamID string, data []byte) {
 	up.mu.RLock()
 	for _, sess := range up.sessions {
 		if sess.streamID == streamID {
-			up.conn.WriteToUDP(data, sess.addr)
+			if _, err := up.conn.WriteToUDP(data, sess.addr); err != nil {
+				log.Printf("[udp] stream %s: write to client %s failed: %v", streamID, sess.addr, err)
+			}
 			break
 		}
 	}

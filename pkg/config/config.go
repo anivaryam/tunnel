@@ -24,8 +24,13 @@ func DefaultPath() string {
 }
 
 // Load reads the config from the given path. Returns a zero-value Config if the file doesn't exist.
+// An empty path (e.g. DefaultPath() when the home dir cannot be resolved) is an error
+// rather than a silent read of the process working directory.
 func Load(path string) (Config, error) {
 	var cfg Config
+	if path == "" {
+		return cfg, fmt.Errorf("config path is empty (cannot resolve home directory)")
+	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -41,6 +46,9 @@ func Load(path string) (Config, error) {
 
 // Save writes the config to the given path, creating directories as needed.
 func Save(path string, cfg Config) error {
+	if path == "" {
+		return fmt.Errorf("config path is empty (cannot resolve home directory)")
+	}
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("create config dir: %w", err)

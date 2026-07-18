@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/anivaryam/tunnel/internal/ipc"
+	"github.com/anivaryam/tunnel/internal/safego"
 	"golang.org/x/term"
 )
 
@@ -42,7 +43,7 @@ func Run(socketPath string) error {
 	}
 
 	// Reader goroutine.
-	go func() {
+	safego.Go("monitor.reader", func() {
 		for {
 			ev, err := c.Recv()
 			if err != nil {
@@ -53,11 +54,11 @@ func Run(socketPath string) error {
 			}
 			m.apply(ev)
 		}
-	}()
+	})
 
 	// Keystroke goroutine.
 	keyCh := make(chan byte, 8)
-	go func() {
+	safego.Go("monitor.keystroke", func() {
 		buf := make([]byte, 1)
 		for {
 			n, err := os.Stdin.Read(buf)
@@ -66,7 +67,7 @@ func Run(socketPath string) error {
 			}
 			keyCh <- buf[0]
 		}
-	}()
+	})
 
 	tick := time.NewTicker(250 * time.Millisecond)
 	defer tick.Stop()

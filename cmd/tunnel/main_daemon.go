@@ -230,6 +230,23 @@ func maybeDaemonize(f daemonFlagSet, argv []string, c *client.Client, mode strin
 
 	hash := instanceHash(c, mode)
 	pidPath := paths.PID(hash)
+
+	// Serialize the check→reexec→write-pid window with an O_EXCL lock file so two
+	// concurrent `tunnel http` invocations for the same hash can't both spawn a
+	// daemon (TOCTOU on the pid file). ponytail: a crash between create and
+	// remove leaves a stale .lock that blocks daemonize until deleted manually;
+	// upgrade to flock with liveness if that proves painful.
+	lockPath := pidPath + ".lock"
+	lf, err := os.OpenFile(lockPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+	if err != nil {
+		if os.IsExist(err) {
+			return fmt.Errorf("another tunnel daemonize is in progress (hash=%s); if none is, remove %s", hash, lockPath)
+		}
+		return fmt.Errorf("acquire daemon lock: %w", err)
+	}
+	lf.Close()
+	defer os.Remove(lockPath)
+
 	if pid, _, err := daemon.ReadPID(pidPath); err == nil && daemon.IsAlive(pid) {
 		return fmt.Errorf("tunnel daemon already running (pid=%d, hash=%s); use 'tunnel stop' first", pid, hash)
 	}

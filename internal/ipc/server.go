@@ -5,6 +5,7 @@ package ipc
 import (
 	"bufio"
 	"encoding/json"
+	"log"
 	"net"
 	"sync"
 	"time"
@@ -160,6 +161,7 @@ func (s *Server) handle(conn net.Conn) {
 			select {
 			case s.cmdCh <- *ev.Cmd:
 			default:
+				log.Printf("[ipc] command queue full, dropping command %q", ev.Cmd.Action)
 			}
 			ack, _ := json.Marshal(Event{Type: TypeAck, Ack: "ok"})
 			conn.SetWriteDeadline(time.Now().Add(2 * time.Second))
